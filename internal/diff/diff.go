@@ -4,7 +4,6 @@ package diff
 import (
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -19,15 +18,11 @@ func Load(rng string) ([]FileChange, error) {
 		return nil, ErrBadRange
 	}
 	// Arguments are passed one by one (no shell), and "--" marks the end of revisions.
-	out, err := exec.Command("git", "diff", "--numstat", "-z", "--no-ext-diff", rng, "--").Output()
+	out, err := git("diff", "--numstat", "-z", "--no-ext-diff", rng, "--")
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("git diff %s: %s", rng, strings.TrimSpace(string(exitErr.Stderr)))
-		}
-		return nil, fmt.Errorf("running git: %w", err)
+		return nil, err
 	}
-	return Parse(string(out))
+	return Parse(out)
 }
 
 // FileChange is one changed file and how many lines it added and deleted.

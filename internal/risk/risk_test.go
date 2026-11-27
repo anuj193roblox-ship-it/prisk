@@ -4,10 +4,39 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/anuj193roblox-ship-it/prisk/internal/config"
 	"github.com/anuj193roblox-ship-it/prisk/internal/diff"
 )
 
 type fc = diff.FileChange
+
+// score runs the v1 checks only: default settings, no history.
+func score(files []fc) Result {
+	return Score(Input{Files: files, Config: config.Default()})
+}
+
+func TestConfigSensitiveReplacesDefaults(t *testing.T) {
+	r := Score(Input{
+		Files:  []fc{{Path: "infra/main.tf"}, {Path: "auth/notes.md"}},
+		Config: config.Config{Sensitive: []string{"infra"}},
+	})
+	if got := points(r)["sensitive"]; got != 30 || r.Findings[0].Reason != "touches sensitive code: infra/main.tf" {
+		t.Errorf("findings = %+v; want only infra/ flagged", r.Findings)
+	}
+}
+
+func TestConfigSkipHidesFilesFromEveryCheck(t *testing.T) {
+	r := Score(Input{
+		Files: []fc{
+			{Path: "vendor/lib/auth/x.go", Added: 600},
+			{Path: "api/user.pb.go", Added: 600},
+		},
+		Config: config.Config{Sensitive: config.DefaultSensitive, Skip: []string{"vendor/*", "*.pb.go"}},
+	})
+	if r.Score != 0 {
+		t.Errorf("score = %d, findings %+v; want 0", r.Score, r.Findings)
+	}
+}
 
 // points returns each finding's points keyed by signal name.
 func points(r Result) map[string]int {
@@ -53,7 +82,7 @@ func TestScoreSpecExamples(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := Score(c.files)
+			r := score(c.files)
 			if r.Score != c.score || r.Level != c.level {
 				t.Errorf("got %d %s, want %d %s", r.Score, r.Level, c.score, c.level)
 			}
@@ -74,7 +103,7 @@ func TestSizeBoundaries(t *testing.T) {
 	cases := map[int]int{0: 0, 49: 0, 50: 10, 199: 10, 200: 20, 499: 20, 500: 30, 9000: 30}
 	for lines, want := range cases {
 		// A docs file, so only the size check can fire.
-		r := Score([]fc{{Path: "docs/guide.md", Added: lines}})
+		r := score([]fc{{Path: "docs/guide.md", Added: lines}})
 		if got := points(r)["size"]; got != want {
 			t.Errorf("%d lines: size = %d, want %d", lines, got, want)
 		}
@@ -82,7 +111,7 @@ func TestSizeBoundaries(t *testing.T) {
 }
 
 func TestSizeCountsAddedAndDeletedAcrossFiles(t *testing.T) {
-	r := Score([]fc{{Path: "a.md", Added: 30, Deleted: 10}, {Path: "b.md", Deleted: 20}})
+	r := score([]fc{{Path: "a.md", Added: 30, Deleted: 10}, {Path: "b.md", Deleted: 20}})
 	if got := r.Findings[0].Reason; got != "60 lines changed across 2 files" {
 		t.Errorf("reason = %q", got)
 	}
@@ -98,7 +127,7 @@ func TestLevelBoundaries(t *testing.T) {
 }
 
 func TestFindingsSortedHighestFirst(t *testing.T) {
-	r := Score([]fc{{Path: "auth/a.go", Added: 600}})
+	r := score([]fc{{Path: "auth/a.go", Added: 600}})
 	for i := 1; i < len(r.Findings); i++ {
 		if r.Findings[i].Points > r.Findings[i-1].Points {
 			t.Fatalf("not sorted: %+v", r.Findings)
@@ -107,7 +136,7 @@ func TestFindingsSortedHighestFirst(t *testing.T) {
 }
 
 func TestSensitiveReasonListsAtMostThree(t *testing.T) {
-	r := Score([]fc{
+	r := score([]fc{
 		{Path: "auth/a.md"}, {Path: "auth/b.md"}, {Path: "auth/c.md"}, {Path: "auth/d.md"}, {Path: "auth/e.md"},
 	})
 	reason := r.Findings[0].Reason
@@ -118,7 +147,7 @@ func TestSensitiveReasonListsAtMostThree(t *testing.T) {
 
 func TestNoFindingsIsEmptyListNotNil(t *testing.T) {
 	// Matters for JSON: an empty list prints [], nil prints null.
-	if r := Score(nil); r.Findings == nil {
+	if r := score(nil); r.Findings == nil {
 		t.Error("Findings is nil, want empty slice")
 	}
 }

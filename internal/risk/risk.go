@@ -3,8 +3,8 @@ package risk
 import (
 	"fmt"
 	"sort"
-	"strings"
 
+	"github.com/anuj193roblox-ship-it/prisk/internal/config"
 	"github.com/anuj193roblox-ship-it/prisk/internal/diff"
 )
 
@@ -22,21 +22,30 @@ type Result struct {
 	Findings []Finding `json:"findings"`
 }
 
+// Input is everything the checks look at.
+type Input struct {
+	Files   []diff.FileChange // what the branch changed
+	History []diff.Commit     // the base branch's past commits, newest first
+	Author  string            // email of whoever wrote the branch
+	Config  config.Config
+}
+
 // Every check has the same shape, so Score can loop over them.
 // Order matters only for ties: equal points keep this order in the output.
-var checks = []func([]diff.FileChange) Finding{sensitiveCheck, testGapCheck, sizeCheck}
+var checks = []func(Input) Finding{sensitiveCheck, testGapCheck, sizeCheck, hotspotCheck, unfamiliarCheck}
 
-// Score runs every check on the changed files and adds up the points.
-func Score(files []diff.FileChange) Result {
+// Score runs every check and adds up the points.
+func Score(in Input) Result {
 	var counted []diff.FileChange
-	for _, f := range files {
-		if !isSkipped(f) {
+	for _, f := range in.Files {
+		if !isSkipped(f, in.Config.Skip) {
 			counted = append(counted, f)
 		}
 	}
+	in.Files = counted // checks only ever see files that count
 	res := Result{Findings: []Finding{}}
 	for _, check := range checks {
-		if f := check(counted); f.Points > 0 {
+		if f := check(in); f.Points > 0 {
 			res.Findings = append(res.Findings, f)
 			res.Score += f.Points
 		}
@@ -61,7 +70,8 @@ func level(score int) string {
 }
 
 // sizeCheck: bigger changes are harder to review, so more slips through.
-func sizeCheck(files []diff.FileChange) Finding {
+func sizeCheck(in Input) Finding {
+	files := in.Files
 	lines := 0
 	for _, f := range files {
 		lines += f.Added + f.Deleted
@@ -83,27 +93,23 @@ func sizeCheck(files []diff.FileChange) Finding {
 }
 
 // sensitiveCheck: mistakes in logins, money or data hurt the most.
-func sensitiveCheck(files []diff.FileChange) Finding {
+func sensitiveCheck(in Input) Finding {
 	var hits []string
-	for _, f := range files {
-		if isSensitive(f.Path) {
+	for _, f := range in.Files {
+		if isSensitive(f.Path, in.Config.Sensitive) {
 			hits = append(hits, f.Path)
 		}
 	}
 	if len(hits) == 0 {
 		return Finding{}
 	}
-	reason := "touches sensitive code: " + strings.Join(hits[:min(3, len(hits))], ", ")
-	if len(hits) > 3 {
-		reason += fmt.Sprintf(" (+%d more)", len(hits)-3)
-	}
-	return Finding{"sensitive", 30, reason}
+	return Finding{"sensitive", 30, "touches sensitive code: " + listUpTo3(hits)}
 }
 
 // testGapCheck: new code with no new tests means nothing checks that it works.
-func testGapCheck(files []diff.FileChange) Finding {
+func testGapCheck(in Input) Finding {
 	source, tests := false, false
-	for _, f := range files {
+	for _, f := range in.Files {
 		if isTest(f.Path) {
 			tests = true
 		} else if isSource(f.Path) {

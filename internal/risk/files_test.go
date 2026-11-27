@@ -3,6 +3,7 @@ package risk
 import (
 	"testing"
 
+	"github.com/anuj193roblox-ship-it/prisk/internal/config"
 	"github.com/anuj193roblox-ship-it/prisk/internal/diff"
 )
 
@@ -64,7 +65,7 @@ func TestIsSensitive(t *testing.T) {
 		"app/github/workflows/x.yml":    false, // needs the dot: .github
 	}
 	for path, want := range cases {
-		if got := isSensitive(path); got != want {
+		if got := isSensitive(path, config.DefaultSensitive); got != want {
 			t.Errorf("isSensitive(%q) = %v, want %v", path, got, want)
 		}
 	}
@@ -83,8 +84,27 @@ func TestIsSkipped(t *testing.T) {
 		{diff.FileChange{Path: "package.json"}, false},
 	}
 	for _, c := range cases {
-		if got := isSkipped(c.f); got != c.want {
+		if got := isSkipped(c.f, nil); got != c.want {
 			t.Errorf("isSkipped(%+v) = %v, want %v", c.f, got, c.want)
+		}
+	}
+}
+
+func TestSkipPatterns(t *testing.T) {
+	patterns := []string{"vendor/*", "*.pb.go", "docs/generated/*"}
+	cases := map[string]bool{
+		"vendor/lib.go":         true,
+		"vendor/a/b/c.go":       true, // a pattern with "/" also matches parent folders
+		"api/user.pb.go":        true, // no "/" in the pattern: matched against the file name
+		"user.pb.go":            true,
+		"docs/generated/x/y.md": true,
+		"src/vendor/lib.go":     false, // "vendor/*" starts at the repo root
+		"docs/guide.md":         false,
+		"api/user.go":           false,
+	}
+	for p, want := range cases {
+		if got := isSkipped(diff.FileChange{Path: p}, patterns); got != want {
+			t.Errorf("isSkipped(%q) = %v, want %v", p, got, want)
 		}
 	}
 }
