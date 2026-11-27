@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // New creates an empty repo on branch main in a temp folder and makes it the
@@ -50,9 +51,34 @@ func Write(t *testing.T, path string, n int) {
 	}
 }
 
+// WriteText creates or overwrites a file with exact contents.
+func WriteText(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Commit stages everything and commits it.
 func Commit(t *testing.T, msg string) {
 	t.Helper()
 	Git(t, "add", "-A")
 	Git(t, "commit", "-q", "-m", msg)
+}
+
+// CommitAs stages everything and commits it with a chosen author email and date.
+func CommitAs(t *testing.T, msg, email string, when time.Time) {
+	t.Helper()
+	Git(t, "add", "-A")
+	d := when.Format(time.RFC3339)
+	cmd := exec.Command("git", "commit", "-q", "--allow-empty", "-m", msg)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_EMAIL="+email, "GIT_COMMITTER_EMAIL="+email,
+		"GIT_AUTHOR_DATE="+d, "GIT_COMMITTER_DATE="+d)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, out)
+	}
 }

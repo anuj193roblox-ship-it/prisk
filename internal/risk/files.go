@@ -21,11 +21,26 @@ var sourceExts = map[string]bool{
 	".cpp": true, ".cs": true, ".php": true, ".swift": true,
 }
 
-// Folders where a mistake costs the most (logins, money, data, deploys).
-var sensitiveDirs = []string{"auth", "payments", "billing", "migrations", "security", ".github/workflows"}
-
-func isSkipped(f diff.FileChange) bool {
-	return f.Binary || lockfiles[path.Base(f.Path)]
+// isSkipped reports whether every check should ignore f: binaries, lockfiles, and the config's skip patterns.
+func isSkipped(f diff.FileChange, patterns []string) bool {
+	if f.Binary || lockfiles[path.Base(f.Path)] {
+		return true
+	}
+	for _, pat := range patterns {
+		if !strings.Contains(pat, "/") {
+			if ok, _ := path.Match(pat, path.Base(f.Path)); ok {
+				return true
+			}
+			continue
+		}
+		// Like .gitignore: "vendor/*" also skips vendor/a/b.go, by matching each parent folder in turn.
+		for p := f.Path; p != "."; p = path.Dir(p) {
+			if ok, _ := path.Match(pat, p); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func isTest(p string) bool {
@@ -47,7 +62,7 @@ func isSource(p string) bool {
 	return !isTest(p) && sourceExts[path.Ext(p)]
 }
 
-func isSensitive(p string) bool {
+func isSensitive(p string, sensitiveDirs []string) bool {
 	// Wrap the folder path in slashes so "auth" only matches a whole folder name:
 	// "/src/auth/" contains "/auth/", but "/author/" does not.
 	dirs := "/" + path.Dir(p) + "/"

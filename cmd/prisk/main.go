@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/anuj193roblox-ship-it/prisk/internal/config"
 	"github.com/anuj193roblox-ship-it/prisk/internal/diff"
 	"github.com/anuj193roblox-ship-it/prisk/internal/risk"
 )
@@ -57,7 +58,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		return 1
 	}
-	res := risk.Score(files)
+	in, err := gather(rng, files)
+	if err != nil {
+		fmt.Fprintln(stderr, "prisk:", err)
+		return 1
+	}
+	res := risk.Score(in)
 
 	if *asJSON {
 		enc := json.NewEncoder(stdout)
@@ -76,4 +82,28 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "  +%d  %s\n", f.Points, f.Reason)
 	}
 	return 0
+}
+
+// gather reads everything besides the changed files that the checks need.
+// History and settings come from the base side, never from the PR: otherwise
+// a PR could edit .prisk.json to switch off the checks that would flag it.
+func gather(rng string, files []diff.FileChange) (risk.Input, error) {
+	base, head := diff.Split(rng)
+	raw, err := diff.Show(base, config.File)
+	if err != nil {
+		return risk.Input{}, err
+	}
+	cfg, err := config.Parse(raw) // no file: raw is nil, which gives the defaults
+	if err != nil {
+		return risk.Input{}, fmt.Errorf("%s: %w", config.File, err)
+	}
+	history, err := diff.Log(base)
+	if err != nil {
+		return risk.Input{}, err
+	}
+	author, err := diff.Author(head)
+	if err != nil {
+		return risk.Input{}, err
+	}
+	return risk.Input{Files: files, History: history, Author: author, Config: cfg}, nil
 }
