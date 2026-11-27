@@ -67,21 +67,21 @@ func TestIsFix(t *testing.T) {
 }
 
 func TestHotspot(t *testing.T) {
-	file := []fc{{Path: "worker/queue.md", Added: 5}} // .md so only history checks can fire
+	file := []fc{{Path: "worker/queue.go", Added: 5}}
 	cases := []struct {
 		name string
 		h    []diff.Commit
 		want int
 	}{
-		{"3 recent fixes", history(fixes("worker/queue.md", 3, 10, "me@x.com")), 15},
-		{"2 recent fixes", history(fixes("worker/queue.md", 2, 10, "me@x.com")), 0},
-		{"fix exactly 90 days ago counts", history(fixes("worker/queue.md", 3, 90, "me@x.com")), 15},
-		{"3 fixes older than 90 days", history(fixes("worker/queue.md", 3, 91, "me@x.com")), 0},
-		{"fixes to another file", history(fixes("worker/other.md", 3, 10, "me@x.com")), 0},
+		{"3 recent fixes", history(fixes("worker/queue.go", 3, 10, "me@x.com")), 15},
+		{"2 recent fixes", history(fixes("worker/queue.go", 2, 10, "me@x.com")), 0},
+		{"fix exactly 90 days ago counts", history(fixes("worker/queue.go", 3, 90, "me@x.com")), 15},
+		{"3 fixes older than 90 days", history(fixes("worker/queue.go", 3, 91, "me@x.com")), 0},
+		{"fixes to another file", history(fixes("worker/other.go", 3, 10, "me@x.com")), 0},
 		{"non-fix commits", history([]diff.Commit{
-			{Email: "me@x.com", Time: daysAgo(1), Subject: "prefix the names", Files: []string{"worker/queue.md"}},
-			{Email: "me@x.com", Time: daysAgo(2), Subject: "prefix the names", Files: []string{"worker/queue.md"}},
-			{Email: "me@x.com", Time: daysAgo(3), Subject: "prefix the names", Files: []string{"worker/queue.md"}},
+			{Email: "me@x.com", Time: daysAgo(1), Subject: "prefix the names", Files: []string{"worker/queue.go"}},
+			{Email: "me@x.com", Time: daysAgo(2), Subject: "prefix the names", Files: []string{"worker/queue.go"}},
+			{Email: "me@x.com", Time: daysAgo(3), Subject: "prefix the names", Files: []string{"worker/queue.go"}},
 		}), 0},
 	}
 	for _, c := range cases {
@@ -95,13 +95,26 @@ func TestHotspot(t *testing.T) {
 }
 
 func TestHotspotReasonMostFixedFirst(t *testing.T) {
-	files := []fc{{Path: "b.md"}, {Path: "a.md"}, {Path: "c.md"}, {Path: "d.md"}}
-	h := history(fixes("b.md", 3, 5, "me@x.com"), fixes("a.md", 5, 5, "me@x.com"),
-		fixes("c.md", 4, 5, "me@x.com"), fixes("d.md", 3, 5, "me@x.com"))
+	files := []fc{{Path: "b.go"}, {Path: "a.go"}, {Path: "c.go"}, {Path: "d.go"}}
+	h := history(fixes("b.go", 3, 5, "me@x.com"), fixes("a.go", 5, 5, "me@x.com"),
+		fixes("c.go", 4, 5, "me@x.com"), fixes("d.go", 3, 5, "me@x.com"))
 	f, ok := finding(run(files, h, "me@x.com"), "hotspot")
-	want := "changes bug-prone files: a.md (5 fixes in 90 days), c.md (4 fixes in 90 days), b.md (3 fixes in 90 days) (+1 more)"
+	want := "changes bug-prone files: a.go (5 fixes in 90 days), c.go (4 fixes in 90 days), b.go (3 fixes in 90 days) (+1 more)"
 	if !ok || f.Reason != want {
 		t.Errorf("reason = %q\nwant     %q", f.Reason, want)
+	}
+}
+
+// Docs, config and test files often ride along in fix commits for code; they aren't the risky part.
+func TestHistoryChecksOnlyLookAtCode(t *testing.T) {
+	nonCode := []string{"docs/security.mdx", "README.md", ".gitignore", "config/app.yml", "worker/queue_test.go"}
+	for _, p := range nonCode {
+		r := run([]fc{{Path: p}}, history(fixes(p, 5, 1, "other@x.com")), "me@x.com")
+		for _, sig := range []string{"hotspot", "unfamiliar"} {
+			if f, ok := finding(r, sig); ok {
+				t.Errorf("%s: %s fired: %q", p, sig, f.Reason)
+			}
+		}
 	}
 }
 
@@ -123,15 +136,15 @@ func TestUnfamiliar(t *testing.T) {
 		author string
 		want   int
 	}{
-		{"never touched it", []fc{{Path: "billing/a.md"}}, history(touch("billing/a.md", "other@x.com", 10)), "me@x.com", 10},
-		{"touched it before", []fc{{Path: "billing/a.md"}}, history(touch("billing/a.md", "me@x.com", 10)), "me@x.com", 0},
-		{"email case ignored", []fc{{Path: "billing/a.md"}}, history(touch("billing/a.md", "Me@X.com", 10)), "me@x.com", 0},
-		{"touched one of two", []fc{{Path: "a.md"}, {Path: "b.md"}},
-			history(touch("a.md", "other@x.com", 10), touch("b.md", "me@x.com", 10)), "me@x.com", 0},
-		{"brand-new file", []fc{{Path: "new.md"}}, history(touch("old.md", "other@x.com", 10)), "me@x.com", 0},
-		{"last touched over a year ago counts as new", []fc{{Path: "a.md"}},
-			history(touch("a.md", "other@x.com", 366)), "me@x.com", 0},
-		{"no author known", []fc{{Path: "a.md"}}, history(touch("a.md", "other@x.com", 10)), "", 0},
+		{"never touched it", []fc{{Path: "billing/a.go"}}, history(touch("billing/a.go", "other@x.com", 10)), "me@x.com", 10},
+		{"touched it before", []fc{{Path: "billing/a.go"}}, history(touch("billing/a.go", "me@x.com", 10)), "me@x.com", 0},
+		{"email case ignored", []fc{{Path: "billing/a.go"}}, history(touch("billing/a.go", "Me@X.com", 10)), "me@x.com", 0},
+		{"touched one of two", []fc{{Path: "a.go"}, {Path: "b.go"}},
+			history(touch("a.go", "other@x.com", 10), touch("b.go", "me@x.com", 10)), "me@x.com", 0},
+		{"brand-new file", []fc{{Path: "new.go"}}, history(touch("old.go", "other@x.com", 10)), "me@x.com", 0},
+		{"last touched over a year ago counts as new", []fc{{Path: "a.go"}},
+			history(touch("a.go", "other@x.com", 366)), "me@x.com", 0},
+		{"no author known", []fc{{Path: "a.go"}}, history(touch("a.go", "other@x.com", 10)), "", 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -145,9 +158,9 @@ func TestUnfamiliar(t *testing.T) {
 
 func TestUnfamiliarReason(t *testing.T) {
 	h := history([]diff.Commit{{Email: "other@x.com", Time: daysAgo(3), Subject: "feat",
-		Files: []string{"a.md", "b.md", "c.md", "d.md"}}})
-	f, ok := finding(run([]fc{{Path: "d.md"}, {Path: "a.md"}, {Path: "c.md"}, {Path: "b.md"}, {Path: "new.md"}}, h, "me@x.com"), "unfamiliar")
-	want := "author hasn't changed these files in the last year: a.md, b.md, c.md (+1 more)"
+		Files: []string{"a.go", "b.go", "c.go", "d.go"}}})
+	f, ok := finding(run([]fc{{Path: "d.go"}, {Path: "a.go"}, {Path: "c.go"}, {Path: "b.go"}, {Path: "new.go"}}, h, "me@x.com"), "unfamiliar")
+	want := "author hasn't changed these files in the last year: a.go, b.go, c.go (+1 more)"
 	if !ok || f.Reason != want {
 		t.Errorf("reason = %q\nwant     %q", f.Reason, want)
 	}

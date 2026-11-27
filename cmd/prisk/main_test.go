@@ -134,24 +134,24 @@ func fixThreeTimes(t *testing.T, path string) {
 
 func TestHotspotComesFromBaseHistory(t *testing.T) {
 	gittest.New(t)
-	gittest.Write(t, "worker/queue.md", 1)
+	gittest.Write(t, "worker/queue.go", 1)
 	gittest.Commit(t, "start")
-	fixThreeTimes(t, "worker/queue.md")
+	fixThreeTimes(t, "worker/queue.go")
 	gittest.Git(t, "checkout", "-q", "-b", "pr")
-	gittest.Write(t, "worker/queue.md", 10)
+	gittest.Write(t, "worker/queue.go", 10)
 	gittest.Commit(t, "tweak queue")
 
-	if got := reasons(t, "main...pr")["hotspot"]; got != "changes bug-prone files: worker/queue.md (3 fixes in 90 days)" {
+	if got := reasons(t, "main...pr")["hotspot"]; got != "changes bug-prone files: worker/queue.go (3 fixes in 90 days)" {
 		t.Errorf("hotspot reason = %q", got)
 	}
 }
 
 func TestFixesOnThePRBranchDontCount(t *testing.T) {
 	gittest.New(t)
-	gittest.Write(t, "worker/queue.md", 1)
+	gittest.Write(t, "worker/queue.go", 1)
 	gittest.Commit(t, "start")
 	gittest.Git(t, "checkout", "-q", "-b", "pr")
-	fixThreeTimes(t, "worker/queue.md")
+	fixThreeTimes(t, "worker/queue.go")
 
 	if got, ok := reasons(t, "main...pr")["hotspot"]; ok {
 		t.Errorf("PR's own fixes made a hotspot: %q", got)
@@ -160,13 +160,13 @@ func TestFixesOnThePRBranchDontCount(t *testing.T) {
 
 func TestUnfamiliarAuthor(t *testing.T) {
 	gittest.New(t)
-	gittest.Write(t, "billing/invoice.md", 1)
+	gittest.Write(t, "billing/invoice.go", 1)
 	gittest.CommitAs(t, "start", "someone-else@example.com", time.Now())
 	gittest.Git(t, "checkout", "-q", "-b", "pr")
-	gittest.Write(t, "billing/invoice.md", 3)
+	gittest.Write(t, "billing/invoice.go", 3)
 	gittest.Commit(t, "change invoice") // by test@example.com
 
-	want := "author hasn't changed these files in the last year: billing/invoice.md"
+	want := "author hasn't changed these files in the last year: billing/invoice.go"
 	if got := reasons(t, "main...pr")["unfamiliar"]; got != want {
 		t.Errorf("unfamiliar reason = %q, want %q", got, want)
 	}

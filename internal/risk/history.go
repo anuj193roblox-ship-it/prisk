@@ -41,7 +41,8 @@ func hotspotCheck(in Input) Finding {
 	}
 	var hot []string
 	for _, f := range in.Files {
-		if fixCount[f.Path] >= 3 {
+		// Code only: docs and tests often ride along in fix commits without being the risky part.
+		if isSource(f.Path) && fixCount[f.Path] >= 3 {
 			hot = append(hot, f.Path)
 		}
 	}
@@ -67,9 +68,11 @@ func unfamiliarCheck(in Input) Finding {
 		return Finding{}
 	}
 	cutoff := newest(in.History).AddDate(-1, 0, 0)
-	changed := map[string]bool{}
+	changed := map[string]bool{} // code files only, as in hotspotCheck
 	for _, f := range in.Files {
-		changed[f.Path] = true
+		if isSource(f.Path) {
+			changed[f.Path] = true
+		}
 	}
 	existing := map[string]bool{} // changed files that have history: only those can be "known"
 	for _, c := range in.History {

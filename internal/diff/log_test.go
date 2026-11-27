@@ -66,6 +66,21 @@ func TestLogAndAuthorOnRealRepo(t *testing.T) {
 	}
 }
 
+// .mailmap tells git that several emails are one person; Log and Author must respect it.
+func TestMailmapMergesEmails(t *testing.T) {
+	gittest.New(t)
+	gittest.WriteText(t, ".mailmap", "Dev <dev@work.com> <dev@home.com>\n")
+	gittest.CommitAs(t, "from home", "dev@home.com", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+
+	got, err := Log("HEAD")
+	if err != nil || got[0].Email != "dev@work.com" {
+		t.Errorf("Log email = %q, %v; want dev@work.com", got[0].Email, err)
+	}
+	if author, err := Author("HEAD"); err != nil || author != "dev@work.com" {
+		t.Errorf("Author = %q, %v; want dev@work.com", author, err)
+	}
+}
+
 func TestLogRejectsOptionLikeRevision(t *testing.T) {
 	if _, err := Log("--all"); err != ErrBadRange {
 		t.Errorf("err = %v, want ErrBadRange", err)

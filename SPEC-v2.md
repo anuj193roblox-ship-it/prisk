@@ -30,6 +30,13 @@ and from then on prisk flags PRs that touch those folders, the files we keep fix
 Both read the base branch's history: its newest **5,000 commits** (non-merge), limited to the **last 365 days**.
 *(Shortcut: the 5,000 cap keeps huge repos fast. Raise it if a repo commits more than that in a year.)*
 
+Both look at **source files only**, using the same rule as the test-gap check. Docs, config and test files
+often ride along in fix commits for code (a `fix(proxy): …` commit that also updates a docs page),
+so counting them flagged files that weren't the risky part. *(Changed after running v2 on real repos.)*
+
+Author emails go through git's `.mailmap`, so one person committing from several emails counts as one person
+in repos that have a `.mailmap`. *(Known limit: without one, a second email looks like a different author.)*
+
 ### 4. Hotspots: +15
 
 - A **fix commit** is one whose message (first line) contains, as a whole word, any of:
@@ -148,6 +155,7 @@ v2 is done when all of these are true:
 7. A `.prisk.json` that exists only on the PR branch has no effect.
 8. Broken JSON, an unknown key, or a bad glob → exit 1 with `prisk: .prisk.json: ...`.
 9. All five checks firing → score is exactly 100.
+9b. Docs, config and test files never trigger `hotspot` or `unfamiliar`. A `.mailmap` entry merges two emails into one author.
 10. Running on the `headroom` repo (~3,800 commits) takes under 3 seconds.
 11. README documents the new checks and the config file. The v2 PR is open on GitHub with prisk's score of itself.
 

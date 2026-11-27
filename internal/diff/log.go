@@ -27,9 +27,10 @@ func Log(rev string) ([]Commit, error) {
 		return nil, ErrBadRange
 	}
 	// \x1e starts each commit and \x1f separates its fields: characters that never appear in emails or messages.
+	// %aE (capital E) applies .mailmap, so one person with several emails counts as one person.
 	// quotePath=false prints non-English file names as-is instead of escaped.
 	out, err := git("-c", "core.quotePath=false", "log", "--no-merges", "--max-count="+maxCommits,
-		"--format=%x1e%ae%x1f%ct%x1f%s", "--name-only", rev, "--")
+		"--format=%x1e%aE%x1f%ct%x1f%s", "--name-only", rev, "--")
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +70,7 @@ func Author(rev string) (string, error) {
 	if strings.HasPrefix(rev, "-") {
 		return "", ErrBadRange
 	}
-	out, err := git("log", "-1", "--format=%ae", rev, "--")
+	out, err := git("log", "-1", "--format=%aE", rev, "--") // %aE applies .mailmap, as in Log
 	return strings.TrimSpace(out), err
 }
 
