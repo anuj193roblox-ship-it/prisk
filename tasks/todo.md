@@ -34,7 +34,7 @@ Each task: write the tests first, make them pass, run `go test ./... && go vet .
   - Notes: Go's `flag` stops at the first non-flag, so `score main...x --json` needs the remaining args parsed again.
     Put logic in `run(args, stdout, stderr) int` so tests check exit codes without building a binary.
 
-- [ ] **7. README, first commit, push** — ask first: git name/email, creating the GitHub repo
+- [x] **7. README, first commit, push** — ask first: git name/email, creating the GitHub repo
   - Acceptance: README has what/why, install, usage, real example output; code is committed and on GitHub.
   - Verify: fresh `go install github.com/anuj193roblox-ship-it/prisk/cmd/prisk@latest` works.
   - Files: `README.md`
