@@ -2,6 +2,7 @@ package diff
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,6 +79,19 @@ func TestMailmapMergesEmails(t *testing.T) {
 	}
 	if author, err := Author("HEAD"); err != nil || author != "dev@work.com" {
 		t.Errorf("Author = %q, %v; want dev@work.com", author, err)
+	}
+}
+
+// Error messages must name the git command that failed, e.g. "git log: ...", not "git -c: ...".
+func TestGitErrorsNameTheCommand(t *testing.T) {
+	gittest.New(t)
+	gittest.Write(t, "a.go", 1)
+	gittest.Commit(t, "start")
+	if _, err := Log("no-such-branch"); err == nil || !strings.HasPrefix(err.Error(), "git log: ") {
+		t.Errorf("Log error = %v; want it to start with \"git log: \"", err)
+	}
+	if _, err := Load("main...no-such-branch"); err == nil || !strings.HasPrefix(err.Error(), "git diff: ") {
+		t.Errorf("Load error = %v; want it to start with \"git diff: \"", err)
 	}
 }
 

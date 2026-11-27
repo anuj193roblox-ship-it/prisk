@@ -28,8 +28,8 @@ func Log(rev string) ([]Commit, error) {
 	}
 	// \x1e starts each commit and \x1f separates its fields: characters that never appear in emails or messages.
 	// %aE (capital E) applies .mailmap, so one person with several emails counts as one person.
-	// quotePath=false prints non-English file names as-is instead of escaped.
-	out, err := git("-c", "core.quotePath=false", "log", "--no-merges", "--max-count="+maxCommits,
+	// File names come out unescaped because git() turns off core.quotePath for every call.
+	out, err := git("log", "--no-merges", "--max-count="+maxCommits,
 		"--format=%x1e%aE%x1f%ct%x1f%s", "--name-only", rev, "--")
 	if err != nil {
 		return nil, err
@@ -88,9 +88,12 @@ func Show(rev, path string) ([]byte, error) {
 	return out, nil
 }
 
-// git runs a git command and returns its output, or git's own error message.
+// git runs a git command (args[0] is the command name, e.g. "log") and returns its output,
+// or git's own error message prefixed with that command name.
 func git(args ...string) (string, error) {
-	out, err := exec.Command("git", args...).Output()
+	// Settings go here, not in args, so args[0] stays the command name.
+	// quotePath=false prints non-English file names as-is instead of escaped.
+	out, err := exec.Command("git", append([]string{"-c", "core.quotePath=false"}, args...)...).Output()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
